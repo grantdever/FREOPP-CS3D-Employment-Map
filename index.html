@@ -342,7 +342,7 @@ function render() {
     `<span>High (${legendHigh})</span>`;
 
   const sorted = Object.entries(SD).sort((a,b) => getVal(b[1]) - getVal(a[1]));
-  const modeLabel = isPct ? "Highest % of Workforce" : "Most Workers";
+  const modeLabel = isPct ? "States by Workforce Concentration (%)" : "States by Total Workforce Exposure (Workers)";
   document.getElementById("rankTitle").textContent = `Top 10 ${modeLabel} — ${v.label}`;
   const grid = document.getElementById("rankGrid");
   grid.innerHTML = "";
