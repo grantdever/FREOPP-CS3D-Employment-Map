@@ -156,7 +156,7 @@
   </div>
 
   <div class="methodology">
-    <strong>Methodology:</strong> State-level employment data is derived from the Bureau of Labor Statistics' Quarterly Census of Employment and Wages (QCEW) 2024 annual averages. The analysis measures UI-covered wage-and-salary workers in NAICS 31-33 (Manufacturing), NAICS 21 (Mining, Quarrying, and Oil and Gas Extraction), and NAICS 11 (Agriculture, Forestry, Fishing and Hunting) as a percentage of total covered employment. Self-employed proprietors and family farmers are excluded.
+    <strong>Methodology:</strong> State-level employment data is derived from the Bureau of Labor Statistics' Quarterly Census of Employment and Wages (QCEW) 2024 annual averages. The analysis measures UI-covered wage-and-salary workers in NAICS 31-33 (Manufacturing), NAICS 21 (Mining, Quarrying, and Oil and Gas Extraction), and NAICS 11 (Agriculture, Forestry, Fishing and Hunting) as a percentage of total covered employment. Self-employed proprietors and family farmers are excluded. State totals may not perfectly reflect all jobs due to standard BLS data privacy suppressions in certain sectors. Suppressed data points are marked accordingly.
   </div>
 
   <div class="freopp-credit">
@@ -398,16 +398,20 @@ function showTooltip(event, abbr) {
   const tt = document.getElementById("tooltip");
   document.getElementById("ttName").textContent = d.name;
 
-  if (isPct) {
+
+  if (d[v.empKey] === 0) {
+    document.getElementById("ttHighlight").innerHTML = `<span style="color:#E17C05">Data Suppressed</span> in ${v.label.toLowerCase()}`;
+  } else if (isPct) {
     document.getElementById("ttHighlight").innerHTML = `<span style="color:#E17C05">${d[v.pctKey].toFixed(1)}%</span> of state workforce in ${v.label.toLowerCase()}`;
   } else {
     document.getElementById("ttHighlight").innerHTML = `<span style="color:#E17C05">${fmtAbs(d[v.empKey])}</span> workers in ${v.label.toLowerCase()}`;
   }
 
+
   document.getElementById("ttRows").innerHTML =
-    `<div>Manufacturing: ${fmtAbs(d.mfg)} workers (${d.mfg_pct.toFixed(1)}%)</div>` +
-    `<div>Mining/Energy: ${fmtAbs(d.mining)} workers (${d.mining_pct.toFixed(1)}%)</div>` +
-    `<div>Agriculture: ${fmtAbs(d.ag)} workers (${d.ag_pct.toFixed(1)}%)</div>`;
+    `<div>Manufacturing: ${d.mfg === 0 ? "<i>Data Suppressed</i>" : fmtAbs(d.mfg) + " workers (" + d.mfg_pct.toFixed(1) + "%)"}</div>` +
+    `<div>Mining/Energy: ${d.mining === 0 ? "<i>Data Suppressed</i>" : fmtAbs(d.mining) + " workers (" + d.mining_pct.toFixed(1) + "%)"}</div>` +
+    `<div>Agriculture: ${d.ag === 0 ? "<i>Data Suppressed</i>" : fmtAbs(d.ag) + " workers (" + d.ag_pct.toFixed(1) + "%)"}</div>`;
   
   // UPDATED: Added the total workforce denominator as a subtle final line
   document.getElementById("ttTotal").innerHTML = 
