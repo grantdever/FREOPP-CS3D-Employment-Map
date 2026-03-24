@@ -1,48 +1,23 @@
 """
 Pull state-level employment data from BLS QCEW Open Data API.
-
-Fetches 2024 annual average employment for three CS3D high-risk sectors:
-  - NAICS 11: Agriculture, Forestry, Fishing and Hunting
-  - NAICS 21: Mining, Quarrying, and Oil and Gas Extraction
-  - NAICS 31-33: Manufacturing
-
-Source: BLS Quarterly Census of Employment and Wages (QCEW)
-API Docs: https://www.bls.gov/cew/additional-resources/open-data/csv-data-slices.htm
-
-Usage:
-    python pull_qcew_data.py
-
-Output:
-    - Prints a summary table to the console
-    - Saves full results to qcew_state_employment.csv
-    - Saves a JSON file ready to paste into the visualization: qcew_state_data.json
+Fetches exact 2024 annual average employment for CS3D high-risk sectors.
 """
 
 import csv
 import io
 import json
 import urllib.request
-import sys
-
-# ---------------------------------------------------------------------------
-# Configuration
-# ---------------------------------------------------------------------------
 
 YEAR = 2024
-QUARTER = "a"  # "a" = annual averages
+QUARTER = "a"
 
-# Industry codes as they appear in the QCEW URL (hyphens replaced with underscores)
 INDUSTRIES = {
     "11": "Agriculture",
     "21": "Mining",
-    "1013": "Manufacturing",  # QCEW uses "1013" for the 31-33 manufacturing supersector
+    "1013": "Manufacturing",
 }
-
-# We also need "10" (total all industries) for calculating percentages
 TOTAL_INDUSTRY = "10"
 
-# FIPS state codes (excluding DC, PR, VI for the 50-state map)
-# Area codes in QCEW are FIPS + "000" (e.g., California = "06000")
 FIPS_TO_ABBR = {
     "01": "AL", "02": "AK", "04": "AZ", "05": "AR", "06": "CA",
     "08": "CO", "09": "CT", "10": "DE", "12": "FL", "13": "GA",
@@ -72,19 +47,9 @@ STATE_NAMES = {
     "WI": "Wisconsin", "WY": "Wyoming",
 }
 
-# ---------------------------------------------------------------------------
-# Fetch helper
-# ---------------------------------------------------------------------------
-
 def fetch_industry_csv(industry_code, year=YEAR, quarter=QUARTER):
-    """
-    Fetch a QCEW industry data slice as a list of dicts.
-    
-    URL pattern: https://data.bls.gov/cew/data/api/{year}/{quarter}/industry/{code}.csv
-    """
     url = f"https://data.bls.gov/cew/data/api/{year}/{quarter}/industry/{industry_code}.csv"
     print(f"  Fetching: {url}")
-    
     req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (QCEW research script)"})
     try:
         resp = urllib.request.urlopen(req, timeout=30)
@@ -96,26 +61,9 @@ def fetch_industry_csv(industry_code, year=YEAR, quarter=QUARTER):
         return []
 
 def extract_state_employment(rows, target_own="5"):
-    """
-    From a QCEW industry slice, extract state-level total employment.
-    target_own defaults to "5" (Private) for specific sectors, but 
-    should be "0" (Total All Ownerships) for the statewide total.
-    
-    Filters:
-      - own_code matches target_own
-      - agglvl_code == "50" (state, total all ownerships, NAICS sector)
-        OR "51" (state, total all ownerships, NAICS 3-digit)
-        OR "40" for supersector-level
-      - area_fips matches a state (XX000 pattern)
-    
-    Returns dict: { "AL": employment_int, "AK": employment_int, ... }
-    """
     state_emp = {}
-    
     for row in rows:
         area_fips = row.get("area_fips", "")
-        
-        # State-level records have FIPS like "01000", "02000", etc.
         if not area_fips.endswith("000") or len(area_fips) != 5:
             continue
         
@@ -124,38 +72,29 @@ def extract_state_employment(rows, target_own="5"):
         if not abbr:
             continue
         
-        # Filter by our target ownership code ("0" or "5")
         own_code = row.get("own_code", "")
         if own_code != target_own:
             continue
         
-        # For annual averages, use annual_avg_emplvl
         emp_str = row.get("annual_avg_emplvl", "0")
         try:
             emp = int(emp_str.replace(",", ""))
         except ValueError:
             continue
         
-        # Take the highest aggregation match per state
         if abbr not in state_emp or emp > state_emp[abbr]:
             state_emp[abbr] = emp
     
     return state_emp
 
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
-
 def main():
     print(f"Pulling QCEW {YEAR} annual average data for 50 states...\n")
     
-    # 1. Fetch total employment (all industries) for calculating percentages
     print("Fetching total employment (NAICS 10 - all industries)...")
     total_rows = fetch_industry_csv(TOTAL_INDUSTRY)
     total_emp = extract_state_employment(total_rows, target_own="0")
     print(f"  Got data for {len(total_emp)} states\n")
     
-    # 2. Fetch each sector
     sector_data = {}
     for code, label in INDUSTRIES.items():
         print(f"Fetching {label} (NAICS {code})...")
@@ -164,7 +103,6 @@ def main():
         sector_data[label] = emp
         print(f"  Got data for {len(emp)} states\n")
     
-    # 3. Compile results
     print("=" * 90)
     print(f"{'State':<22} {'Total':>10} {'Mfg':>10} {'Mining':>10} {'Ag':>10} {'Combined':>10} {'Pct':>7}")
     print("-" * 90)
@@ -180,11 +118,11 @@ def main():
         
         results[abbr] = {
             "name": STATE_NAMES[abbr],
-            "total": round(total / 1000, 1),     # Convert to thousands (K)
-            "mfg": round(mfg / 1000, 1),
-            "mining": round(mining / 1000, 1),
-            "ag": round(ag / 1000, 1),
-            "combined_K": round(combined / 1000, 1),
+            "total": total,
+            "mfg": mfg,
+            "mining": mining,
+            "ag": ag,
+            "combined": combined,
             "combined_pct": pct,
             "mfg_pct": round(mfg / total * 100, 1) if total > 0 else 0,
             "mining_pct": round(mining / total * 100, 1) if total > 0 else 0,
@@ -194,23 +132,7 @@ def main():
         name = STATE_NAMES[abbr]
         print(f"  {abbr} {name:<18} {total:>10,} {mfg:>10,} {mining:>10,} {ag:>10,} {combined:>10,} {pct:>6.1f}%")
     
-    # National totals
-    nat_total = sum(total_emp.get(a, 0) for a in FIPS_TO_ABBR.values())
-    nat_mfg = sum(sector_data.get("Manufacturing", {}).get(a, 0) for a in FIPS_TO_ABBR.values())
-    nat_mining = sum(sector_data.get("Mining", {}).get(a, 0) for a in FIPS_TO_ABBR.values())
-    nat_ag = sum(sector_data.get("Agriculture", {}).get(a, 0) for a in FIPS_TO_ABBR.values())
-    nat_combined = nat_mfg + nat_mining + nat_ag
-    
-    if nat_total > 0:
-        nat_pct = (nat_combined / nat_total) * 100
-    else:
-        nat_pct = 0.0
-
-    print("-" * 90)
-    print(f"  {'NATIONAL TOTAL':<20} {nat_total:>10,} {nat_mfg:>10,} {nat_mining:>10,} {nat_ag:>10,} {nat_combined:>10,} {nat_pct:>6.1f}%")
-    
-    # 4. Save CSV
-    csv_path = "qcew_state_employment.csv"
+    csv_path = "qcew_state_employment_exact.csv"
     with open(csv_path, "w", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(["state_abbr", "state_name", "total_employment", "manufacturing", 
@@ -219,28 +141,14 @@ def main():
         for abbr in sorted(results.keys()):
             r = results[abbr]
             writer.writerow([abbr, r["name"], r["total"], r["mfg"], r["mining"], 
-                           r["ag"], r["combined_K"], r["combined_pct"],
+                           r["ag"], r["combined"], r["combined_pct"],
                            r["mfg_pct"], r["mining_pct"], r["ag_pct"]])
     print(f"\nSaved CSV: {csv_path}")
     
-    # 5. Save JSON (for pasting into the visualization)
-    json_path = "qcew_state_data.json"
-    with open(json_path, "w") as f:
-        json.dump(results, f, indent=2)
-    print(f"Saved JSON: {json_path}")
-    
-    # 6. Print the compact JS version ready to paste into the HTML
     print(f"\n{'=' * 90}")
     print("COMPACT JS (paste into HTML as STATE_DATA):")
     print(f"{'=' * 90}")
     print(f"const SD = {json.dumps(results, separators=(',', ':'))};")
-    
-    print(f"\n\nDone! If any states show 0 for a sector, it may be due to QCEW disclosure")
-    print("restrictions (data suppressed to protect employer identity).")
-    print(f"\nNote: QCEW 'annual_avg_emplvl' for NAICS 11 covers UI-insured ag workers only.")
-    print(f"National QCEW ag total ({nat_ag:,}) will be lower than BLS EP total (1,480,700)")
-    print(f"because EP includes self-employed farmers. QCEW is the correct source for")
-    print(f"state-level hired agricultural employment.")
 
 if __name__ == "__main__":
     main()
