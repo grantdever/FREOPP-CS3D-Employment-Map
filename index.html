@@ -52,8 +52,14 @@
   /* Image styling with blend mode to remove white background */
   .map-logo {
     height: 24px;
+    max-width: 100%;
     mix-blend-mode: multiply;
-    display: block; 
+    display: block;
+  }
+
+  @media (max-width: 480px) {
+    .map-logo { height: 16px; }
+    .map-logo-link { bottom: 8px; right: 10px; }
   }
 
   .tooltip { position: absolute; pointer-events: none; z-index: 20;
